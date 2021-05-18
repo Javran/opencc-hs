@@ -37,10 +37,8 @@ import           Foreign.ForeignPtr ( ForeignPtr, newForeignPtr, newForeignPtr_,
 import           System.IO.Unsafe ( unsafePerformIO )
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
-import Data.Bits ( complement )
+import           Data.Bits ( complement )
 import           Text.OpenCC.Raw
-
-import Debug.Trace
 
 -- |OpenCC handle plus the finalizer. The OpenCC instance will be
 -- finalized when the object is garbage collected.
@@ -61,7 +59,7 @@ open :: String -> MaybeT IO OpenCC
 open cfg = do
   raw <- lift $ withCString cfg _openccOpen
   guard ((ptrToIntPtr raw) /= (complement 0))
-  handle <- lift $ (trace "create opencc" newForeignPtr _openccClosePtr raw)
+  handle <- lift $ newForeignPtr _openccClosePtr raw
   return handle
 
 -- |Use an OpenCC handle to do the conversion. The result is a UTF-8
@@ -116,7 +114,7 @@ _wrapBS :: FunPtr (CString -> IO ()) -> CString -> IO BS.ByteString
 _wrapBS finalizer cstr = do
   len <- c_strlen cstr
   ptr <- newForeignPtr finalizer cstr
-  return $ trace "create bs" $ fromForeignPtr (castForeignPtr ptr) 0 (fromIntegral len)
+  return $ fromForeignPtr (castForeignPtr ptr) 0 (fromIntegral len)
 
 -- |Wrap a 'CString' in 'BS.ByteString' with
 -- '_openccConvertUtf8FreePtr' being the finalizer. Useful for
