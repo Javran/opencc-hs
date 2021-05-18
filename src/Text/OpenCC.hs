@@ -29,7 +29,10 @@ module Text.OpenCC
   , defaultSimpToTrad, defaultTradToSimp
   ) where
 
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text as T
+import           Data.Text.Encoding
+import qualified Data.Text.IO as T
+import qualified Data.ByteString as BS
 import           Data.ByteString.Internal ( fromForeignPtr, c_strlen )
 import           Foreign.C.String ( CString, withCString, withCStringLen )
 import           Foreign.Ptr ( Ptr, FunPtr, ptrToIntPtr )
@@ -63,25 +66,25 @@ open cfg = do
   return handle
 
 -- |Use an OpenCC handle to do the conversion. The result is a UTF-8
--- encoded byte string.
-convertIO :: OpenCC -> String -> IO BS.ByteString
-convertIO handle str = withForeignPtr handle $ \ptr -> withCStringLen str $ \(cstr,len) ->
-  _openccConvertUtf8 ptr cstr (fromIntegral len) >>= _wrapBS'
+-- encoded text.
+convertIO :: OpenCC -> T.Text -> IO T.Text
+convertIO handle str = withForeignPtr handle $ \ptr -> BS.useAsCStringLen (encodeUtf8 str) $ \(cstr,len) ->
+  _openccConvertUtf8 ptr cstr (fromIntegral len) >>= _wrapText
 
 -- |Return the last error message. This function is NOT thread-safe.
-lastError :: IO BS.ByteString
+lastError :: IO T.Text
 lastError = do
   err <- _openccError
   ptr <- newForeignPtr_ err
   len <- c_strlen err
-  return $ fromForeignPtr (castForeignPtr ptr) 0 (fromIntegral len)
+  return $ decodeUtf8 $ fromForeignPtr (castForeignPtr ptr) 0 (fromIntegral len)
 
 -- |Do a one-shot conversion. Note that this might affect the outcome
 -- of 'lastError', and thus unsafe (despite the pureness suggested by
 -- the signature).
 --
 -- > convert1 defaultSimpToTrad "头发发财"
-convert1 :: String -> String -> Maybe BS.ByteString
+convert1 :: String -> T.Text -> Maybe T.Text
 convert1 cfg str = (unsafePerformIO . runMaybeT) $ do
   handle <- open cfg
   res    <- lift $ convertIO handle str
@@ -93,7 +96,7 @@ newtype OpenCCM a = OpenCCM (ReaderT OpenCC IO a)
   deriving (Functor, Applicative, Monad, MonadIO)
 
 -- |Convert a string in the current environment.
-convert :: String -> OpenCCM BS.ByteString
+convert :: T.Text -> OpenCCM T.Text
 convert str = OpenCCM $ do
   handle <- ask
   res    <- lift $ convertIO handle str
@@ -121,3 +124,10 @@ _wrapBS finalizer cstr = do
 -- wrapping strings from OpenCC.
 _wrapBS' :: CString -> IO BS.ByteString
 _wrapBS' = _wrapBS (_openccConvertUtf8FreePtr)
+
+-- |Decode the UTF-8 bytestrings into a 'Text'.
+--
+-- OpenCC always returns valid UTF-8 strings if your input is
+-- well-formed.
+_wrapText :: CString -> IO T.Text
+_wrapText cstr = _wrapBS' cstr >>= \bs -> return (decodeUtf8 bs)
