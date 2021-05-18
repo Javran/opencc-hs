@@ -61,9 +61,8 @@ defaultTradToSimp = "t2s.json"
 open :: String -> MaybeT IO OpenCC
 open cfg = do
   raw <- lift $ withCString cfg _openccOpen
-  guard ((ptrToIntPtr raw) /= (complement 0))
-  handle <- lift $ newForeignPtr _openccClosePtr raw
-  return handle
+  guard (ptrToIntPtr raw /= complement 0)
+  lift $ newForeignPtr _openccClosePtr raw
 
 -- |Use an OpenCC handle to do the conversion. The result is a UTF-8
 -- encoded text.
@@ -87,8 +86,7 @@ lastError = do
 convert1 :: String -> T.Text -> Maybe T.Text
 convert1 cfg str = (unsafePerformIO . runMaybeT) $ do
   handle <- open cfg
-  res    <- lift $ convertIO handle str
-  return res
+  lift $ convertIO handle str
 
 -- |The OpenCC environment. In this environment, any conversion
 -- happens within a single 'OpenCC' instance created by 'withOpenCC'.
@@ -99,8 +97,7 @@ newtype OpenCCM a = OpenCCM (ReaderT OpenCC IO a)
 convert :: T.Text -> OpenCCM T.Text
 convert str = OpenCCM $ do
   handle <- ask
-  res    <- lift $ convertIO handle str
-  return res
+  lift $ convertIO handle str
 
 -- |Open an OpenCC environment (which is 'MonadIO'), where 'convert'
 -- is available.
@@ -123,7 +120,7 @@ _wrapBS finalizer cstr = do
 -- '_openccConvertUtf8FreePtr' being the finalizer. Useful for
 -- wrapping strings from OpenCC.
 _wrapBS' :: CString -> IO BS.ByteString
-_wrapBS' = _wrapBS (_openccConvertUtf8FreePtr)
+_wrapBS' = _wrapBS _openccConvertUtf8FreePtr
 
 -- |Decode the UTF-8 bytestrings into a 'Text'.
 --
