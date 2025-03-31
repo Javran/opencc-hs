@@ -42,6 +42,7 @@ import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import           Data.Bits ( complement )
 import           Text.OpenCC.Raw
+import Control.Monad
 
 -- |OpenCC handle plus the finalizer. The OpenCC instance will be
 -- finalized when the object is garbage collected.
